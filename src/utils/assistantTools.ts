@@ -170,6 +170,7 @@ export function getTimeUntil(targetTime: number): string {
 // ============================================================================
 
 export function extractTaskFromText(text: string): { task: string; dueDate?: number } | null {
+  if (!text || typeof text !== 'string') return null;
   // Simple NLP to detect task creation requests
   const taskPatterns = [
     /(?:add|create|make|new) (?:a )?(?:task|todo|reminder) (?:to |for )?(.+)/i,
@@ -187,6 +188,7 @@ export function extractTaskFromText(text: string): { task: string; dueDate?: num
 }
 
 export function detectTimeQuery(text: string): 'time' | 'date' | 'day' | null {
+  if (!text || typeof text !== 'string') return null;
   const lowerText = text.toLowerCase();
   
   if (/what(?:'s| is) the time|tell me the time|current time/.test(lowerText)) {
@@ -205,6 +207,7 @@ export function detectTimeQuery(text: string): 'time' | 'date' | 'day' | null {
 }
 
 export function detectTaskQuery(text: string): 'list' | 'count' | 'clear' | null {
+  if (!text || typeof text !== 'string') return null;
   const lowerText = text.toLowerCase();
   
   if (/(?:list|show|what are|tell me) (?:my )?tasks/.test(lowerText)) {

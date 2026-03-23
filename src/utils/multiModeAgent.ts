@@ -48,6 +48,7 @@ export function clearModeState(): void {
 // ============================================================================
 
 export function detectModeSwitch(text: string): VoiceMode | null {
+  if (!text || typeof text !== 'string') return null;
   const lower = text.toLowerCase();
   
   if (/(?:tell|start|begin) (?:a |me a )?(?:story|tale|adventure)/.test(lower)) {
@@ -123,6 +124,10 @@ export function initStory(): string {
 }
 
 export function continueStory(choice: string): string {
+  if (!choice || typeof choice !== 'string') {
+    return "I didn't catch that. Please make a choice.";
+  }
+  
   const state = getModeState<StoryState>();
   if (!state) return initStory();
   
@@ -191,6 +196,10 @@ export function initLanguageLearning(level: 'beginner' | 'intermediate' | 'advan
 }
 
 export function evaluatePronunciation(userText: string): string {
+  if (!userText || typeof userText !== 'string') {
+    return "I didn't hear you. Please try again.";
+  }
+  
   const state = getModeState<LanguageState>();
   if (!state) return initLanguageLearning();
   
@@ -256,6 +265,9 @@ const RECIPES: Record<string, string[]> = {
 };
 
 export function startCooking(recipeName: string): string {
+  if (!recipeName || typeof recipeName !== 'string') {
+    return "What would you like to cook? Say: pasta, eggs, salad, or rice.";
+  }
   const recipe = recipeName.toLowerCase();
   const steps = RECIPES[recipe] || RECIPES.pasta;
   
@@ -282,6 +294,7 @@ export function nextCookingStep(): string {
 }
 
 export function detectCookingCommand(text: string): 'next' | 'repeat' | 'timer' | 'start' | null {
+  if (!text || typeof text !== 'string') return null;
   const lower = text.toLowerCase();
   if (/next|continue|done/.test(lower)) return 'next';
   if (/repeat|again|what/.test(lower)) return 'repeat';
@@ -299,6 +312,9 @@ export function getCookingPrompt(): string {
 // ============================================================================
 
 export function executeProductivityCommand(command: string): string {
+  if (!command || typeof command !== 'string') {
+    return "Say: open website, search, new tab, or scroll.";
+  }
   const lower = command.toLowerCase();
   
   if (/open|navigate to|go to/.test(lower)) {
@@ -375,6 +391,9 @@ export function startWellnessSession(): string {
 }
 
 export function respondToMood(userText: string): string {
+  if (!userText || typeof userText !== 'string') {
+    return "I'm here to listen. How are you feeling?";
+  }
   const lower = userText.toLowerCase();
   const state = getModeState<WellnessState>() || { moodHistory: [], sessionCount: 0 };
   

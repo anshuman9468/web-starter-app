@@ -259,11 +259,13 @@ export function VoiceTab() {
         systemPrompt: `${getSystemPromptForMode(currentMode)} ${currentMode === 'assistant' ? buildAssistantContext() : ''}`,
       }, {
         onTranscription: (text) => {
-          userTranscript = text;
-          setTranscript(text);
+          userTranscript = text || '';
+          setTranscript(text || '');
           
-          // Check if we can handle this directly without LLM
-          directResponse = handleUserIntent(text);
+          // Check if we can handle this directly without LLM (with safety check)
+          if (text && text.trim()) {
+            directResponse = handleUserIntent(text);
+          }
         },
         onResponseToken: (_token, accumulated) => {
           if (!directResponse) {
