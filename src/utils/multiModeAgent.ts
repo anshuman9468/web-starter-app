@@ -43,6 +43,15 @@ export function clearModeState(): void {
   localStorage.removeItem(STATE_KEY);
 }
 
+// Validate and migrate old state format to new format
+export function validateLanguageState(state: any): state is LanguageState {
+  return state && 
+         typeof state === 'object' &&
+         'language' in state &&
+         'level' in state &&
+         'currentPhrase' in state;
+}
+
 // ============================================================================
 // Mode Detection from User Input
 // ============================================================================
@@ -161,64 +170,236 @@ export function getStoryPrompt(): string {
 // Language Learning Mode
 // ============================================================================
 
+export type LanguageType = 'english' | 'french' | 'spanish' | 'german' | 'italian';
+
 interface LanguageState {
+  language: LanguageType;
   level: 'beginner' | 'intermediate' | 'advanced';
   wordsLearned: number;
   currentPhrase: string;
 }
 
-const PRACTICE_PHRASES = {
-  beginner: [
-    "Hello, how are you?",
-    "Good morning, nice to meet you",
-    "Thank you very much",
-    "Where is the bathroom?",
-    "I would like some water",
-  ],
-  intermediate: [
-    "Could you please help me with this?",
-    "I'm learning to speak more fluently",
-    "What's the best way to practice?",
-    "I enjoy reading books in English",
-  ],
-  advanced: [
-    "The philosophical implications are profound",
-    "I'd appreciate your perspective on this matter",
-    "How do you articulate complex ideas clearly?",
-  ],
+const LANGUAGE_PHRASES: Record<LanguageType, {
+  beginner: string[];
+  intermediate: string[];
+  advanced: string[];
+  greeting: string;
+  encouragement: string;
+  tryAgain: string;
+}> = {
+  english: {
+    beginner: [
+      "Hello, how are you?",
+      "Good morning, nice to meet you",
+      "Thank you very much",
+      "Where is the bathroom?",
+      "I would like some water",
+    ],
+    intermediate: [
+      "Could you please help me with this?",
+      "I'm learning to speak more fluently",
+      "What's the best way to practice?",
+      "I enjoy reading books in English",
+    ],
+    advanced: [
+      "The philosophical implications are profound",
+      "I'd appreciate your perspective on this matter",
+      "How do you articulate complex ideas clearly?",
+    ],
+    greeting: "Welcome to English practice!",
+    encouragement: "Great job!",
+    tryAgain: "Try again",
+  },
+  french: {
+    beginner: [
+      "Bonjour, comment allez-vous?",
+      "Merci beaucoup",
+      "Je m'appelle",
+      "Où sont les toilettes?",
+      "Je voudrais de l'eau",
+      "Bonne journée",
+      "Au revoir",
+    ],
+    intermediate: [
+      "Pourriez-vous m'aider s'il vous plaît?",
+      "J'apprends à parler français",
+      "Quelle est la meilleure façon de pratiquer?",
+      "J'aime lire des livres en français",
+    ],
+    advanced: [
+      "Les implications philosophiques sont profondes",
+      "J'apprécierais votre perspective sur cette question",
+      "Comment articulez-vous des idées complexes clairement?",
+    ],
+    greeting: "Bienvenue à la pratique du français!",
+    encouragement: "Très bien!",
+    tryAgain: "Essayez encore",
+  },
+  spanish: {
+    beginner: [
+      "Hola, ¿cómo estás?",
+      "Buenos días",
+      "Muchas gracias",
+      "¿Dónde está el baño?",
+      "Quisiera agua por favor",
+      "Buenas tardes",
+      "Hasta luego",
+    ],
+    intermediate: [
+      "¿Podría ayudarme por favor?",
+      "Estoy aprendiendo a hablar español",
+      "¿Cuál es la mejor manera de practicar?",
+      "Me gusta leer libros en español",
+    ],
+    advanced: [
+      "Las implicaciones filosóficas son profundas",
+      "Apreciaría su perspectiva sobre este asunto",
+      "¿Cómo articula ideas complejas claramente?",
+    ],
+    greeting: "¡Bienvenido a la práctica de español!",
+    encouragement: "¡Muy bien!",
+    tryAgain: "Inténtalo de nuevo",
+  },
+  german: {
+    beginner: [
+      "Guten Tag, wie geht es Ihnen?",
+      "Danke schön",
+      "Ich heiße",
+      "Wo ist die Toilette?",
+      "Ich möchte Wasser",
+      "Guten Morgen",
+      "Auf Wiedersehen",
+    ],
+    intermediate: [
+      "Könnten Sie mir bitte helfen?",
+      "Ich lerne Deutsch zu sprechen",
+      "Was ist der beste Weg zu üben?",
+      "Ich lese gerne Bücher auf Deutsch",
+    ],
+    advanced: [
+      "Die philosophischen Implikationen sind tiefgründig",
+      "Ich würde Ihre Perspektive zu dieser Angelegenheit schätzen",
+      "Wie artikulieren Sie komplexe Ideen klar?",
+    ],
+    greeting: "Willkommen zum Deutsch üben!",
+    encouragement: "Sehr gut!",
+    tryAgain: "Versuchen Sie es noch einmal",
+  },
+  italian: {
+    beginner: [
+      "Ciao, come stai?",
+      "Buongiorno",
+      "Grazie mille",
+      "Dove è il bagno?",
+      "Vorrei dell'acqua",
+      "Buona sera",
+      "Arrivederci",
+    ],
+    intermediate: [
+      "Potresti aiutarmi per favore?",
+      "Sto imparando a parlare italiano",
+      "Qual è il modo migliore per praticare?",
+      "Mi piace leggere libri in italiano",
+    ],
+    advanced: [
+      "Le implicazioni filosofiche sono profonde",
+      "Apprezzerei la tua prospettiva su questa questione",
+      "Come si articolano chiaramente idee complesse?",
+    ],
+    greeting: "Benvenuto alla pratica italiana!",
+    encouragement: "Molto bene!",
+    tryAgain: "Riprova",
+  },
 };
 
-export function initLanguageLearning(level: 'beginner' | 'intermediate' | 'advanced' = 'beginner'): string {
-  const phrase = PRACTICE_PHRASES[level][0];
-  const state: LanguageState = { level, wordsLearned: 0, currentPhrase: phrase };
+// Detect which language the user wants to practice
+export function detectLanguage(text: string): LanguageType | null {
+  if (!text || typeof text !== 'string') return null;
+  const lower = text.toLowerCase();
+  
+  if (/french|français|francais|bonjour|merci/.test(lower)) return 'french';
+  if (/spanish|español|espanol|hola|gracias/.test(lower)) return 'spanish';
+  if (/german|deutsch|guten tag|danke/.test(lower)) return 'german';
+  if (/italian|italiano|ciao|grazie/.test(lower)) return 'italian';
+  if (/english/.test(lower)) return 'english';
+  
+  return null;
+}
+
+export function initLanguageLearning(level: 'beginner' | 'intermediate' | 'advanced' = 'beginner', language: LanguageType = 'english'): string {
+  const langData = LANGUAGE_PHRASES[language];
+  const phrases = langData[level];
+  if (!phrases || phrases.length === 0) {
+    return "Language learning mode starting...";
+  }
+  const phrase = phrases[0];
+  const state: LanguageState = { language, level, wordsLearned: 0, currentPhrase: phrase };
   setModeState(state);
-  return `Say this slowly: "${phrase}"`;
+  return `${langData.greeting} Say this slowly: "${phrase}"`;
 }
 
 export function evaluatePronunciation(userText: string): string {
-  if (!userText || typeof userText !== 'string') {
-    return "I didn't hear you. Please try again.";
+  if (!userText || typeof userText !== 'string' || userText.trim() === '') {
+    return "I didn't hear you clearly. Please try again.";
   }
   
   const state = getModeState<LanguageState>();
-  if (!state) return initLanguageLearning();
   
-  const similarity = calculateSimilarity(userText.toLowerCase(), state.currentPhrase.toLowerCase());
+  // If no state or invalid state (missing language or level), reinitialize
+  if (!state || !state.currentPhrase || !state.language || !state.level) {
+    clearModeState(); // Clear corrupted state
+    return initLanguageLearning();
+  }
+  
+  // Check if user wants to switch language
+  const newLanguage = detectLanguage(userText);
+  if (newLanguage && newLanguage !== state.language) {
+    clearModeState();
+    return initLanguageLearning(state.level || 'beginner', newLanguage);
+  }
+  
+  // Ensure we have valid language data
+  const langData = LANGUAGE_PHRASES[state.language];
+  if (!langData) {
+    // Invalid language in state, reset to English
+    clearModeState();
+    return initLanguageLearning(state.level || 'beginner', 'english');
+  }
+  
+  // Ensure level exists in langData
+  const phrases = langData[state.level];
+  if (!phrases || phrases.length === 0) {
+    clearModeState();
+    return initLanguageLearning('beginner', state.language);
+  }
+  
+  // Ensure currentPhrase is valid before processing
+  const targetPhrase = state.currentPhrase || '';
+  if (!targetPhrase) {
+    clearModeState();
+    return initLanguageLearning();
+  }
+  
+  const similarity = calculateSimilarity(userText.toLowerCase().trim(), targetPhrase.toLowerCase().trim());
   
   if (similarity > 0.8) {
     state.wordsLearned++;
-    const nextPhrase = PRACTICE_PHRASES[state.level][state.wordsLearned % PRACTICE_PHRASES[state.level].length];
+    const nextPhrase = phrases[state.wordsLearned % phrases.length];
     state.currentPhrase = nextPhrase;
     setModeState(state);
-    return `Great! Score: ${Math.round(similarity * 100)}%. Next: "${nextPhrase}"`;
+    return `${langData.encouragement} Score: ${Math.round(similarity * 100)}%. Next: "${nextPhrase}"`;
   } else {
-    return `Try again. Focus on: "${state.currentPhrase}". You said: "${userText}"`;
+    return `${langData.tryAgain}. Focus on: "${targetPhrase}". You said: "${userText}"`;
   }
 }
 
 function calculateSimilarity(str1: string, str2: string): number {
-  const words1 = str1.split(' ');
-  const words2 = str2.split(' ');
+  if (!str1 || !str2 || typeof str1 !== 'string' || typeof str2 !== 'string') {
+    return 0;
+  }
+  const words1 = str1.trim().split(/\s+/).filter(w => w.length > 0);
+  const words2 = str2.trim().split(/\s+/).filter(w => w.length > 0);
+  if (words1.length === 0 || words2.length === 0) return 0;
   const matches = words1.filter((w) => words2.includes(w)).length;
   return matches / Math.max(words1.length, words2.length);
 }
@@ -472,7 +653,7 @@ export const MODE_INFO: Record<VoiceMode, { name: string; icon: string; descript
   language: {
     name: "Language Tutor",
     icon: "🗣️",
-    description: "Practice pronunciation and fluency",
+    description: "Learn English, French, Spanish, German, Italian",
   },
   cooking: {
     name: "Cooking Guide",

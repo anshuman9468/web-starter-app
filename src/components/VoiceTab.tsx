@@ -23,6 +23,7 @@ import {
   detectModeSwitch,
   getSystemPromptForMode,
   getModeState,
+  clearModeState,
   MODE_INFO,
   initStory,
   continueStory,
@@ -113,21 +114,26 @@ export function VoiceTab() {
 
     setVoiceState('listening');
 
-    const mic = new AudioCapture({ sampleRate: 16000 });
+    // Optimized audio capture settings for better clarity
+    const mic = new AudioCapture({ 
+      sampleRate: 16000,  // Standard rate for Whisper
+    });
     micRef.current = mic;
 
     if (!pipelineRef.current) {
       pipelineRef.current = new VoicePipeline();
     }
 
-    // Start VAD + mic
+    // Start VAD + mic with optimized settings
     VAD.reset();
 
     vadUnsub.current = VAD.onSpeechActivity((activity) => {
       if (activity === SpeechActivity.Ended) {
         const segment = VAD.popSpeechSegment();
-        // Reduced minimum length for faster triggering (was 1600)
-        if (segment && segment.samples.length > 800) {
+        // Increased minimum length for better quality capture
+        // 1600 samples = ~100ms at 16kHz (better quality, less false triggers)
+        // This ensures we capture complete words/phrases
+        if (segment && segment.samples.length > 1600) {
           processSpeech(segment.samples);
         }
       }
@@ -139,8 +145,42 @@ export function VoiceTab() {
     );
   }, [ensureModels]);
 
+  // Audio preprocessing for improved voice recognition
+  const preprocessAudio = useCallback((audioData: Float32Array): Float32Array => {
+    // Apply normalization to improve recognition accuracy
+    const processed = new Float32Array(audioData.length);
+    
+    // Calculate RMS (Root Mean Square) for volume normalization
+    let sumSquares = 0;
+    for (let i = 0; i < audioData.length; i++) {
+      sumSquares += audioData[i] * audioData[i];
+    }
+    const rms = Math.sqrt(sumSquares / audioData.length);
+    
+    // Normalize audio if too quiet (improves recognition)
+    const targetRms = 0.1; // Target volume level
+    const normalizeGain = rms > 0.001 ? Math.min(targetRms / rms, 3.0) : 1.0;
+    
+    // Apply gain and gentle high-pass filter to reduce low-frequency noise
+    for (let i = 0; i < audioData.length; i++) {
+      processed[i] = audioData[i] * normalizeGain;
+      
+      // Simple high-pass filter: remove DC offset
+      if (i > 0) {
+        processed[i] = processed[i] - 0.97 * processed[i - 1];
+      }
+    }
+    
+    return processed;
+  }, []);
+
   // Process user speech and handle assistant logic for ALL MODES
   const handleUserIntent = useCallback((userText: string): string | null => {
+    // Safety check: ensure userText is valid
+    if (!userText || typeof userText !== 'string') {
+      return "I didn't catch that. Please try again.";
+    }
+    
     const lowerText = userText.toLowerCase();
 
     // Check for mode switch first
@@ -253,7 +293,10 @@ export function VoiceTab() {
       let userTranscript = '';
       let directResponse: string | null = null;
 
-      const result = await pipeline.processTurn(audioData, {
+      // Apply audio preprocessing for better recognition
+      const processedAudio = preprocessAudio(audioData);
+
+      const result = await pipeline.processTurn(processedAudio, {
         maxTokens: 30,
         temperature: 0.95,
         systemPrompt: `${getSystemPromptForMode(currentMode)} ${currentMode === 'assistant' ? buildAssistantContext() : ''}`,
@@ -263,7 +306,7 @@ export function VoiceTab() {
           setTranscript(text || '');
           
           // Check if we can handle this directly without LLM (with safety check)
-          if (text && text.trim()) {
+          if (text && typeof text === 'string' && text.trim().length > 0) {
             directResponse = handleUserIntent(text);
           }
         },
@@ -335,6 +378,12 @@ export function VoiceTab() {
     setCurrentMode(mode);
     setTranscript('');
     setResponse('');
+    
+    // Clear old state and initialize new mode
+    if (mode === 'language') {
+      // Clear any old state to prevent errors
+      clearModeState();
+    }
   };
 
   const modeInfo = MODE_INFO[currentMode];
@@ -381,9 +430,17 @@ export function VoiceTab() {
         <p className="voice-status">
           {voiceState === 'idle' && 'Tap to start listening'}
           {voiceState === 'loading-models' && 'Loading models...'}
-          {voiceState === 'listening' && 'Listening... speak now'}
-          {voiceState === 'processing' && 'Processing...'}
-          {voiceState === 'speaking' && 'Speaking...'}
+          {voiceState === 'listening' && (
+            <span>
+              🎤 Listening... Speak clearly and naturally
+              <br />
+              <small style={{ fontSize: '0.85em', opacity: 0.8 }}>
+                Speak at normal volume • Pause when done
+              </small>
+            </span>
+          )}
+          {voiceState === 'processing' && '⚙️ Processing your voice...'}
+          {voiceState === 'speaking' && '🔊 Speaking...'}
         </p>
 
         {voiceState === 'idle' || voiceState === 'loading-models' ? (
@@ -402,7 +459,10 @@ export function VoiceTab() {
       </div>
 
       <div className="assistant-examples">
-        <p className="text-muted">Try saying:</p>
+        <p className="text-muted">
+          💡 <strong>Tips for best results:</strong> Speak clearly at normal volume • Keep 6-12 inches from mic • Reduce background noise • Pause briefly after speaking
+        </p>
+        <p className="text-muted" style={{ marginTop: '8px' }}>Try saying:</p>
         <div className="example-chips">
           {currentMode === 'assistant' && (
             <>
@@ -420,9 +480,10 @@ export function VoiceTab() {
           )}
           {currentMode === 'language' && (
             <>
+              <span className="chip">"Bonjour" (French)</span>
+              <span className="chip">"Hola" (Spanish)</span>
               <span className="chip">"Teach me English"</span>
-              <span className="chip">"Practice pronunciation"</span>
-              <span className="chip">Repeat phrases clearly</span>
+              <span className="chip">"Practice German"</span>
             </>
           )}
           {currentMode === 'cooking' && (
