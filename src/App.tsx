@@ -41,23 +41,18 @@ export function App() {
 
   return (
     <div className="app">
-      <header className="app-header">
-        <h1>RunAnywhere AI</h1>
-        {accel && <span className="badge">{accel === 'webgpu' ? 'WebGPU' : 'CPU'}</span>}
-      </header>
-
       <nav className="tab-bar">
         <button className={activeTab === 'chat' ? 'active' : ''} onClick={() => setActiveTab('chat')}>
-          💬 Chat
+          <span>💬 Chat</span>
         </button>
         <button className={activeTab === 'vision' ? 'active' : ''} onClick={() => setActiveTab('vision')}>
-          📷 Vision
+          <span>📷 Vision</span>
         </button>
         <button className={activeTab === 'voice' ? 'active' : ''} onClick={() => setActiveTab('voice')}>
-          🎙️ Voice
+          <span>🎙️ Voice</span>
         </button>
         <button className={activeTab === 'tools' ? 'active' : ''} onClick={() => setActiveTab('tools')}>
-          🔧 Tools
+          <span>🔧 Tools</span>
         </button>
       </nav>
 
